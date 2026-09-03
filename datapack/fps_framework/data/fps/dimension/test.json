@@ -1,0 +1,26 @@
+{
+  "type": "fps:test",
+  "generator": {
+    "type": "minecraft:flat",
+    "settings": {
+      "layers": [
+        {
+          "height": 1,
+          "block": "minecraft:bedrock"
+        },
+        {
+          "height": 3,
+          "block": "minecraft:stone"
+        },
+        {
+          "height": 1,
+          "block": "minecraft:grass_block"
+        }
+      ],
+      "biome": "minecraft:plains",
+      "lakes": false,
+      "features": false,
+      "structure_overrides": []
+    }
+  }
+}
