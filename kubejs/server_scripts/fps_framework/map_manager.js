@@ -3,11 +3,9 @@ global.FPS = global.FPS || {};
 global.FPS.MAPS = {
     test: {
         id: 'test',
-        name: 'FPS Test Range',
+        name: 'FPS 靶场测试',
         dimension: 'fps:test',
-
         lobby: { x: 0, y: 80, z: 0 },
-
         spawns: {
             red: [
                 { x: -20, y: 80, z: 0, yaw: 90 },
@@ -41,8 +39,9 @@ global.FPS.teleportSpawn = function(player, team, server) {
     const game = global.FPS.game;
     const map = global.FPS.getMap(game.map);
     const points = map.spawns[team];
-    const index = game.teams[team].length % points.length;
-    const p = points[index];
+    
+    // 随机选择该队伍的一个出生点
+    const p = points[Math.floor(Math.random() * points.length)];
 
     server.runCommandSilent(
         'execute in ' + map.dimension + ' run tp ' +
