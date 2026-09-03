@@ -1,4 +1,4 @@
-// 登录/登出事件
+// 玩家登录/登出事件
 PlayerEvents.loggedIn(event => {
     global.FPS.ensurePlayer(event.player);
     event.player.tell('§e[FPS] 系统就绪，输入 /fps help 查看指令。');
@@ -29,21 +29,20 @@ EntityEvents.hurt(event => {
     const victim = event.entity;
     const attacker = event.source.actual;
 
-    if (victim.isPlayer() && attacker && attacker.isPlayer()) {
+    if (victim && victim.isPlayer() && attacker && attacker.isPlayer()) {
         const aData = global.FPS.ensurePlayer(attacker);
         const vData = global.FPS.ensurePlayer(victim);
-        // 统计有效伤害
         if (aData.gameId === global.FPS.game.id && aData.team !== vData.team) {
             aData.damage += Math.round(event.damage);
         }
     }
 });
 
-// 死亡与击杀接入（核心修复点）
+// 死亡与击杀接入
 EntityEvents.death(event => {
     if (!global.FPS.game || global.FPS.game.state !== global.FPS.STATE.PLAYING) return;
     const victim = event.entity;
-    if (!victim.isPlayer()) return;
+    if (!victim || !victim.isPlayer()) return;
 
     const attacker = event.source.actual;
     if (attacker && attacker.isPlayer()) {
@@ -59,7 +58,7 @@ ServerEvents.tick(event => {
     if (!global.FPS.game) return;
     const g = global.FPS.game;
 
-    // PREPARING
+    // 1. PREPARING 准备阶段
     if (g.state === global.FPS.STATE.PREPARING) {
         g.tick++;
         if (g.players.length >= global.FPS.CONFIG.minPlayers) {
@@ -70,7 +69,7 @@ ServerEvents.tick(event => {
         }
     }
 
-    // COUNTDOWN
+    // 2. COUNTDOWN 倒计时阶段
     else if (g.state === global.FPS.STATE.COUNTDOWN) {
         if (g.players.length < global.FPS.CONFIG.minPlayers) {
             g.state = global.FPS.STATE.PREPARING;
@@ -80,10 +79,11 @@ ServerEvents.tick(event => {
             return;
         }
 
-        const seconds = Math.ceil(g.tick / 20);
-        if (seconds !== g.countdownAnnounced && seconds <= 5 && seconds > 0) {
-            g.countdownAnnounced = seconds;
-            global.FPS.msg(server, '§e倒计时: ' + seconds);
+        // 使用局部块作用域，避免与后续阶段变量冲突
+        const cdSeconds = Math.ceil(g.tick / 20);
+        if (cdSeconds !== g.countdownAnnounced && cdSeconds <= 5 && cdSeconds > 0) {
+            g.countdownAnnounced = cdSeconds;
+            global.FPS.msg(server, '§e倒计时: ' + cdSeconds);
         }
 
         g.tick--;
@@ -91,8 +91,9 @@ ServerEvents.tick(event => {
             g.state = global.FPS.STATE.PLAYING;
             g.tick = 0;
 
-            // 开始发放装备并传送
-            server.players.forEach(p => {
+            const playerList = server.getPlayerList().getPlayers();
+            for (let i = 0; i < playerList.size(); i++) {
+                const p = playerList.get(i);
                 const id = global.FPS.playerId(p);
                 const ps = global.FPS.players[id];
                 if (ps && ps.gameId === g.id) {
@@ -102,49 +103,51 @@ ServerEvents.tick(event => {
                     global.FPS.teleportSpawn(p, ps.team, server);
                     global.FPS.giveLoadout(p, ps.loadout, server);
                 }
-            });
+            }
 
             global.FPS.msg(server, '§c§l战斗开始！');
         }
     }
 
-    // PLAYING
+    // 3. PLAYING 战斗中阶段
     else if (g.state === global.FPS.STATE.PLAYING) {
         g.tick++;
 
-        // 比赛超时判定
+        // 超时判定
         if (g.tick >= global.FPS.CONFIG.timeLimitTicks) {
             const winner = g.score.red === g.score.blue ? null : (g.score.red > g.score.blue ? 'red' : 'blue');
             global.FPS.endGame(server, winner);
             return;
         }
 
-        // 维护玩家复活定时器与 HUD
-        server.players.forEach(p => {
+        const onlineList = server.getPlayerList().getPlayers();
+        for (let j = 0; j < onlineList.size(); j++) {
+            const p = onlineList.get(j);
             const id = global.FPS.playerId(p);
             const ps = global.FPS.players[id];
-            if (!ps || ps.gameId !== g.id) return;
+            if (!ps || ps.gameId !== g.id) continue;
 
-            // 亡者复活倒计时
+            // 玩家阵亡倒计时处理
             if (!ps.alive) {
                 if (ps.respawnTimer > 0) {
                     ps.respawnTimer--;
                     if (ps.respawnTimer % 20 === 0) {
-                        p.tell('§7重生倒计时: ' + Math.ceil(ps.respawnTimer / 20) + 's');
+                        const deathSec = Math.ceil(ps.respawnTimer / 20);
+                        p.tell('§7重生倒计时: ' + deathSec + 's');
                     }
                 } else {
                     global.FPS.respawn(p, server);
                 }
             }
 
-            // 每半秒刷新一次状态栏
+            // 每 10 ticks (0.5s) 刷新 Actionbar 计分栏
             if (g.tick % 10 === 0) {
                 global.FPS.updateHUD(p);
             }
-        });
+        }
     }
 
-    // ENDING
+    // 4. ENDING 结算展示
     else if (g.state === global.FPS.STATE.ENDING) {
         g.tick++;
         if (g.tick >= 100) {
@@ -153,7 +156,7 @@ ServerEvents.tick(event => {
         }
     }
 
-    // RESULT
+    // 5. RESULT 房间清理与重置
     else if (g.state === global.FPS.STATE.RESULT) {
         g.tick++;
         if (g.tick >= 100) {
