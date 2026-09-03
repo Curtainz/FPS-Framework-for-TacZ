@@ -1,9 +1,10 @@
-// 玩家登录/登出事件
+// 玩家进服注册与初始化
 PlayerEvents.loggedIn(event => {
     global.FPS.ensurePlayer(event.player);
     event.player.tell('§e[FPS] 系统就绪，输入 /fps help 查看指令。');
 });
 
+// 玩家离线退出处理
 PlayerEvents.loggedOut(event => {
     if (!global.FPS.game) return;
     const player = event.player;
@@ -12,12 +13,14 @@ PlayerEvents.loggedOut(event => {
 
     if (!ps || ps.gameId !== global.FPS.game.id) return;
 
+    // 清除局内队伍与名单记录
     global.FPS.game.players = global.FPS.game.players.filter(x => x !== id);
     global.FPS.game.teams.red = global.FPS.game.teams.red.filter(x => x !== id);
     global.FPS.game.teams.blue = global.FPS.game.teams.blue.filter(x => x !== id);
 
     delete global.FPS.players[id];
 
+    // 若当局玩家全退则关闭游戏
     if (global.FPS.game.players.length === 0) {
         global.FPS.game = null;
     }
@@ -38,7 +41,7 @@ EntityEvents.hurt(event => {
     }
 });
 
-// 死亡与击杀接入
+// 死亡与击杀事件监听
 EntityEvents.death(event => {
     if (!global.FPS.game || global.FPS.game.state !== global.FPS.STATE.PLAYING) return;
     const victim = event.entity;
@@ -52,13 +55,13 @@ EntityEvents.death(event => {
     }
 });
 
-// 主状态机 Tick
+// 房间状态主循环 Tick
 ServerEvents.tick(event => {
     const server = event.server;
     if (!global.FPS.game) return;
     const g = global.FPS.game;
 
-    // 1. PREPARING 准备阶段
+    // 1. 准备阶段：等待达到最低人数
     if (g.state === global.FPS.STATE.PREPARING) {
         g.tick++;
         if (g.players.length >= global.FPS.CONFIG.minPlayers) {
@@ -69,7 +72,7 @@ ServerEvents.tick(event => {
         }
     }
 
-    // 2. COUNTDOWN 倒计时阶段
+    // 2. 倒计时阶段
     else if (g.state === global.FPS.STATE.COUNTDOWN) {
         if (g.players.length < global.FPS.CONFIG.minPlayers) {
             g.state = global.FPS.STATE.PREPARING;
@@ -79,11 +82,10 @@ ServerEvents.tick(event => {
             return;
         }
 
-        // 使用局部块作用域，避免与后续阶段变量冲突
-        const cdSeconds = Math.ceil(g.tick / 20);
-        if (cdSeconds !== g.countdownAnnounced && cdSeconds <= 5 && cdSeconds > 0) {
-            g.countdownAnnounced = cdSeconds;
-            global.FPS.msg(server, '§e倒计时: ' + cdSeconds);
+        const cdRemainingSeconds = Math.ceil(g.tick / 20);
+        if (cdRemainingSeconds !== g.countdownAnnounced && cdRemainingSeconds <= 5 && cdRemainingSeconds > 0) {
+            g.countdownAnnounced = cdRemainingSeconds;
+            global.FPS.msg(server, '§e倒计时: ' + cdRemainingSeconds);
         }
 
         g.tick--;
@@ -91,6 +93,7 @@ ServerEvents.tick(event => {
             g.state = global.FPS.STATE.PLAYING;
             g.tick = 0;
 
+            // 倒计时结束：所有参战玩家设为冒险模式、传送并领装
             const playerList = server.getPlayerList().getPlayers();
             for (let i = 0; i < playerList.size(); i++) {
                 const p = playerList.get(i);
@@ -99,7 +102,9 @@ ServerEvents.tick(event => {
                 if (ps && ps.gameId === g.id) {
                     ps.alive = true;
                     ps.respawnTimer = 0;
-                    p.runCommandSilent('gamemode adventure');
+
+                    // 核心修复：由 server 控制台强制切模式，非 OP 正常生效
+                    server.runCommandSilent('gamemode adventure ' + p.username);
                     global.FPS.teleportSpawn(p, ps.team, server);
                     global.FPS.giveLoadout(p, ps.loadout, server);
                 }
@@ -109,17 +114,18 @@ ServerEvents.tick(event => {
         }
     }
 
-    // 3. PLAYING 战斗中阶段
+    // 3. 战斗阶段
     else if (g.state === global.FPS.STATE.PLAYING) {
         g.tick++;
 
-        // 超时判定
+        // 比赛限时判定
         if (g.tick >= global.FPS.CONFIG.timeLimitTicks) {
             const winner = g.score.red === g.score.blue ? null : (g.score.red > g.score.blue ? 'red' : 'blue');
             global.FPS.endGame(server, winner);
             return;
         }
 
+        // 处理重生倒计时与 HUD 刷新
         const onlineList = server.getPlayerList().getPlayers();
         for (let j = 0; j < onlineList.size(); j++) {
             const p = onlineList.get(j);
@@ -127,7 +133,7 @@ ServerEvents.tick(event => {
             const ps = global.FPS.players[id];
             if (!ps || ps.gameId !== g.id) continue;
 
-            // 玩家阵亡倒计时处理
+            // 阵亡状态处理
             if (!ps.alive) {
                 if (ps.respawnTimer > 0) {
                     ps.respawnTimer--;
@@ -140,14 +146,14 @@ ServerEvents.tick(event => {
                 }
             }
 
-            // 每 10 ticks (0.5s) 刷新 Actionbar 计分栏
+            // 每 10 ticks (0.5s) 刷新底部计分板
             if (g.tick % 10 === 0) {
                 global.FPS.updateHUD(p);
             }
         }
     }
 
-    // 4. ENDING 结算展示
+    // 4. 结算展示
     else if (g.state === global.FPS.STATE.ENDING) {
         g.tick++;
         if (g.tick >= 100) {
@@ -156,7 +162,7 @@ ServerEvents.tick(event => {
         }
     }
 
-    // 5. RESULT 房间清理与重置
+    // 5. 局后清理与大厅重置
     else if (g.state === global.FPS.STATE.RESULT) {
         g.tick++;
         if (g.tick >= 100) {
