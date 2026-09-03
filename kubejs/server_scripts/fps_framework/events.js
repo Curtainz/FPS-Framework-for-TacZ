@@ -13,14 +13,12 @@ PlayerEvents.loggedOut(event => {
 
     if (!ps || ps.gameId !== global.FPS.game.id) return;
 
-    // 清除局内队伍与名单记录
-    global.FPS.game.players = global.FPS.game.players.filter(x => x !== id);
-    global.FPS.game.teams.red = global.FPS.game.teams.red.filter(x => x !== id);
-    global.FPS.game.teams.blue = global.FPS.game.teams.blue.filter(x => x !== id);
+    global.FPS.game.players = global.FPS.game.players.filter(x => String(x) !== id);
+    global.FPS.game.teams.red = global.FPS.game.teams.red.filter(x => String(x) !== id);
+    global.FPS.game.teams.blue = global.FPS.game.teams.blue.filter(x => String(x) !== id);
 
     delete global.FPS.players[id];
 
-    // 若当局玩家全退则关闭游戏
     if (global.FPS.game.players.length === 0) {
         global.FPS.game = null;
     }
@@ -41,7 +39,7 @@ EntityEvents.hurt(event => {
     }
 });
 
-// 死亡与击杀事件监听
+// 死亡与击杀计分（仅统计数据，不强切模式，防止卡死在死亡界面）
 EntityEvents.death(event => {
     if (!global.FPS.game || global.FPS.game.state !== global.FPS.STATE.PLAYING) return;
     const victim = event.entity;
@@ -55,13 +53,36 @@ EntityEvents.death(event => {
     }
 });
 
+// 核心修复：捕获原生/FirstAid重生完成事件，此时玩家实体管道已正常重置
+PlayerEvents.respawned(event => {
+    if (!global.FPS.game || global.FPS.game.state !== global.FPS.STATE.PLAYING) return;
+    const player = event.player;
+    const id = global.FPS.playerId(player);
+    const ps = global.FPS.players[id];
+
+    // 只有局内玩家在当局生效
+    if (ps && ps.gameId === global.FPS.game.id) {
+        ps.alive = true;
+        ps.respawnTimer = 0;
+
+        // 确保模式为冒险模式
+        event.server.runCommandSilent('gamemode adventure ' + player.username);
+
+        // 传送回己方出生点并重置装备与FirstAid肢体
+        global.FPS.teleportSpawn(player, ps.team, event.server);
+        global.FPS.giveLoadout(player, ps.loadout, event.server);
+
+        player.tell('§a[FPS] 你已重返战场！');
+    }
+});
+
 // 房间状态主循环 Tick
 ServerEvents.tick(event => {
     const server = event.server;
     if (!global.FPS.game) return;
     const g = global.FPS.game;
 
-    // 1. 准备阶段：等待达到最低人数
+    // 1. 准备阶段：等待满足最低玩家数
     if (g.state === global.FPS.STATE.PREPARING) {
         g.tick++;
         if (g.players.length >= global.FPS.CONFIG.minPlayers) {
@@ -93,24 +114,48 @@ ServerEvents.tick(event => {
             g.state = global.FPS.STATE.PLAYING;
             g.tick = 0;
 
-            // 倒计时结束：所有参战玩家设为冒险模式、传送并领装
-            const playerList = server.getPlayerList().getPlayers();
-            for (let i = 0; i < playerList.size(); i++) {
-                const p = playerList.get(i);
-                const id = global.FPS.playerId(p);
-                const ps = global.FPS.players[id];
-                if (ps && ps.gameId === g.id) {
-                    ps.alive = true;
-                    ps.respawnTimer = 0;
+            // 开启即时重生，彻底消除死亡界面卡死 Bug
+            server.runCommandSilent('gamerule doImmediateRespawn true');
 
-                    // 核心修复：由 server 控制台强制切模式，非 OP 正常生效
-                    server.runCommandSilent('gamemode adventure ' + p.username);
-                    global.FPS.teleportSpawn(p, ps.team, server);
-                    global.FPS.giveLoadout(p, ps.loadout, server);
+            console.info('[FPS Start] Teleporting all participants: ' + JSON.stringify(g.players));
+
+            // 通过 UUID 获取所有参赛玩家实体
+            g.players.forEach(uuidStr => {
+                let targetPlayer = null;
+                const playerList = server.getPlayerList().getPlayers();
+                for (let i = 0; i < playerList.size(); i++) {
+                    const candidate = playerList.get(i);
+                    if (global.FPS.playerId(candidate) === uuidStr) {
+                        targetPlayer = candidate;
+                        break;
+                    }
                 }
-            }
 
-            global.FPS.msg(server, '§c§l战斗开始！');
+                if (!targetPlayer) {
+                    console.warn('[FPS Start] Player UUID not found online: ' + uuidStr);
+                    return;
+                }
+
+                const ps = global.FPS.players[uuidStr];
+                if (!ps) {
+                    console.warn('[FPS Start] Player state missing for: ' + targetPlayer.username);
+                    return;
+                }
+
+                ps.alive = true;
+                ps.respawnTimer = 0;
+
+                // 统一设为冒险模式
+                server.runCommandSilent('gamemode adventure ' + targetPlayer.username);
+
+                // 传送并分发装备
+                global.FPS.teleportSpawn(targetPlayer, ps.team, server);
+                global.FPS.giveLoadout(targetPlayer, ps.loadout, server);
+
+                console.info('[FPS Start] Initialized player: ' + targetPlayer.username + ' (Team: ' + ps.team + ')');
+            });
+
+            global.FPS.msg(server, '§c§l战斗正式开始！');
         }
     }
 
@@ -118,14 +163,14 @@ ServerEvents.tick(event => {
     else if (g.state === global.FPS.STATE.PLAYING) {
         g.tick++;
 
-        // 比赛限时判定
+        // 比赛超时判定
         if (g.tick >= global.FPS.CONFIG.timeLimitTicks) {
             const winner = g.score.red === g.score.blue ? null : (g.score.red > g.score.blue ? 'red' : 'blue');
             global.FPS.endGame(server, winner);
             return;
         }
 
-        // 处理重生倒计时与 HUD 刷新
+        // HUD 与状态维护
         const onlineList = server.getPlayerList().getPlayers();
         for (let j = 0; j < onlineList.size(); j++) {
             const p = onlineList.get(j);
@@ -133,20 +178,7 @@ ServerEvents.tick(event => {
             const ps = global.FPS.players[id];
             if (!ps || ps.gameId !== g.id) continue;
 
-            // 阵亡状态处理
-            if (!ps.alive) {
-                if (ps.respawnTimer > 0) {
-                    ps.respawnTimer--;
-                    if (ps.respawnTimer % 20 === 0) {
-                        const deathSec = Math.ceil(ps.respawnTimer / 20);
-                        p.tell('§7重生倒计时: ' + deathSec + 's');
-                    }
-                } else {
-                    global.FPS.respawn(p, server);
-                }
-            }
-
-            // 每 10 ticks (0.5s) 刷新底部计分板
+            // 每 10 ticks (0.5s) 刷新 Actionbar 计分栏
             if (g.tick % 10 === 0) {
                 global.FPS.updateHUD(p);
             }
@@ -166,6 +198,8 @@ ServerEvents.tick(event => {
     else if (g.state === global.FPS.STATE.RESULT) {
         g.tick++;
         if (g.tick >= 100) {
+            // 恢复默认即时重生规则为 false，避免干扰大厅原版机制
+            server.runCommandSilent('gamerule doImmediateRespawn false');
             global.FPS.hardReset(server);
         }
     }
