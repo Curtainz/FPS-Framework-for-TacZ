@@ -2,7 +2,7 @@ global.FPS = global.FPS || {};
 
 global.FPS.playerId = function(player) {
     if (!player) return '';
-    return String(player.getUuid().toString());
+    return String(player.getStringUuid ? player.getStringUuid() : player.getUuid().toString());
 };
 
 global.FPS.ensurePlayer = function(player) {
