@@ -1,48 +1,59 @@
 global.FPS = global.FPS || {};
 
+// 击杀结算
 global.FPS.onKill = function(attacker, victim, server) {
-    if (!global.FPS.game) return;
+    if (!global.FPS.game || global.FPS.game.state !== global.FPS.STATE.PLAYING) return;
 
-    const a = global.FPS.ensurePlayer(attacker);
-    const v = global.FPS.ensurePlayer(victim);
+    const aData = global.FPS.ensurePlayer(attacker);
+    const vData = global.FPS.ensurePlayer(victim);
 
-    if (!a.gameId || a.gameId !== global.FPS.game.id) return;
-    if (!v.gameId || v.gameId !== global.FPS.game.id) return;
-    if (a.team === v.team) return;
+    // 非本局玩家或队友误伤不计分
+    if (aData.gameId !== global.FPS.game.id || vData.gameId !== global.FPS.game.id) return;
+    if (aData.team === vData.team) {
+        attacker.tell('§c[FPS] 警告：请勿攻击队友！');
+        return;
+    }
 
-    a.kills++;
-    v.deaths++;
-    v.alive = false;
+    // 玩家数据统计
+    aData.kills++;
+    vData.deaths++;
+    vData.alive = false;
+    vData.respawnTimer = global.FPS.CONFIG.respawnDelayTicks;
 
-    global.FPS.game.score[a.team]++;
+    // 队伍计分
+    global.FPS.game.score[aData.team]++;
 
+    // 击杀播报（区分队伍颜色）
+    const aColor = aData.team === 'red' ? '§c' : '§9';
+    const vColor = vData.team === 'red' ? '§c' : '§9';
     global.FPS.msg(
         server,
-        attacker.username + ' 击杀了 ' + victim.username +
-        '  [' + a.team.toUpperCase() + ' ' +
-        global.FPS.game.score[a.team] + ']'
+        aColor + attacker.username + ' §7击杀了 ' + vColor + victim.username +
+        ' §e[' + aData.team.toUpperCase() + ' ' + global.FPS.game.score[aData.team] +
+        ' : ' + global.FPS.game.score[vData.team] + ']'
     );
 
-    if (global.FPS.game.score[a.team] >= global.FPS.CONFIG.scoreLimit) {
-        global.FPS.endGame(server, a.team);
+    // 检查是否达到胜利分数
+    if (global.FPS.game.score[aData.team] >= global.FPS.CONFIG.scoreLimit) {
+        global.FPS.endGame(server, aData.team);
     }
 };
 
-global.FPS.handleDeath = function(player, server) {
-    if (!global.FPS.game) return;
+// 玩家非玩家击杀死亡（跌落、虚空、自雷等）
+global.FPS.handleDeath = function(victim, server) {
+    if (!global.FPS.game || global.FPS.game.state !== global.FPS.STATE.PLAYING) return;
 
-    const ps = global.FPS.ensurePlayer(player);
-    if (!ps.gameId || ps.gameId !== global.FPS.game.id) return;
-    if (global.FPS.game.state !== global.FPS.STATE.PLAYING) return;
+    const vData = global.FPS.ensurePlayer(victim);
+    if (vData.gameId !== global.FPS.game.id) return;
 
-    ps.deaths++;
-    ps.alive = false;
-    ps.respawnTimer = global.FPS.CONFIG.respawnDelayTicks;
+    vData.deaths++;
+    vData.alive = false;
+    vData.respawnTimer = global.FPS.CONFIG.respawnDelayTicks;
 
-    player.runCommandSilent('gamemode spectator');
-    player.tell('[FPS] 你已死亡，5 秒后重生。');
+    global.FPS.msg(server, '§7' + victim.username + ' 意外阵亡。');
 };
 
+// 复活处理
 global.FPS.respawn = function(player, server) {
     const ps = global.FPS.ensurePlayer(player);
 
@@ -50,10 +61,8 @@ global.FPS.respawn = function(player, server) {
     ps.respawnTimer = 0;
 
     player.runCommandSilent('gamemode adventure');
-    player.runCommandSilent('clear');
-
     global.FPS.teleportSpawn(player, ps.team, server);
     global.FPS.giveLoadout(player, ps.loadout, server);
 
-    player.tell('[FPS] 已重生。');
+    player.tell('§a[FPS] 你已重新加入战斗！');
 };
