@@ -1,12 +1,17 @@
 global.FPS = global.FPS || {};
 
+global.FPS.playerId = function(player) {
+    if (!player) return '';
+    return String(player.getUuid().toString());
+};
+
 global.FPS.ensurePlayer = function(player) {
     const id = global.FPS.playerId(player);
 
     if (!global.FPS.players[id]) {
         global.FPS.players[id] = {
             uuid: id,
-            name: player.username,
+            name: String(player.username),
             gameId: null,
             team: null,
             alive: true,
@@ -28,17 +33,18 @@ global.FPS.setTeam = function(player, team) {
 
     if (!g || (team !== 'red' && team !== 'blue')) return false;
 
-    g.teams.red = g.teams.red.filter(x => x !== ps.uuid);
-    g.teams.blue = g.teams.blue.filter(x => x !== ps.uuid);
+    g.teams.red = g.teams.red.filter(x => String(x) !== ps.uuid);
+    g.teams.blue = g.teams.blue.filter(x => String(x) !== ps.uuid);
 
     g.teams[team].push(ps.uuid);
     ps.team = team;
+    console.info('[FPS] Player ' + ps.name + ' assigned to team ' + team.toUpperCase());
     return true;
 };
 
 global.FPS.joinGame = function(player, server) {
     if (!global.FPS.game) {
-        player.tell('[FPS] 没有可加入的游戏，请管理员使用 /fps start tdm test。');
+        player.tell('§c[FPS] 没有可加入的游戏，请先使用 /fps start tdm test。');
         return;
     }
 
@@ -46,18 +52,17 @@ global.FPS.joinGame = function(player, server) {
     const ps = global.FPS.ensurePlayer(player);
 
     if (ps.gameId === g.id) {
-        player.tell('[FPS] 你已经在游戏中。');
+        player.tell('§e[FPS] 你已经在游戏中了。');
         return;
     }
 
-    if (g.state !== global.FPS.STATE.PREPARING &&
-        g.state !== global.FPS.STATE.LOBBY) {
-        player.tell('[FPS] 当前游戏已经开始，暂时不能加入。');
+    if (g.state !== global.FPS.STATE.PREPARING && g.state !== global.FPS.STATE.LOBBY) {
+        player.tell('§c[FPS] 当前游戏已经开始或正在倒计时，暂时不能加入。');
         return;
     }
 
     if (g.players.length >= global.FPS.CONFIG.maxPlayers) {
-        player.tell('[FPS] 游戏已满。');
+        player.tell('§c[FPS] 游戏人数已满。');
         return;
     }
 
@@ -68,20 +73,23 @@ global.FPS.joinGame = function(player, server) {
     ps.assists = 0;
     ps.damage = 0;
 
-    g.players.push(ps.uuid);
+    if (!g.players.includes(ps.uuid)) {
+        g.players.push(ps.uuid);
+    }
 
+    // 队伍平衡：红队少进红，蓝队少进蓝
     const team = g.teams.red.length <= g.teams.blue.length ? 'red' : 'blue';
     global.FPS.setTeam(player, team);
 
-    player.tell('[FPS] 已加入 ' + ps.team.toUpperCase() + ' 队。');
-    global.FPS.updateHUD(player);
+    player.tell('§a[FPS] 成功加入！队伍: ' + ps.team.toUpperCase());
+    console.info('[FPS Join] Current players in game: ' + g.players.length + ' / Min needed: ' + global.FPS.CONFIG.minPlayers);
 
-    if (g.players.length >= global.FPS.CONFIG.minPlayers &&
-        g.state === global.FPS.STATE.PREPARING) {
+    // 检查是否达到开始倒计时的人数
+    if (g.players.length >= global.FPS.CONFIG.minPlayers && g.state === global.FPS.STATE.PREPARING) {
         g.state = global.FPS.STATE.COUNTDOWN;
         g.tick = global.FPS.CONFIG.countdownTicks;
         g.countdownAnnounced = -1;
-        global.FPS.msg(server, '人数满足，倒计时开始。');
+        global.FPS.msg(server, '§a参战人数满足，进入倒计时！');
     }
 };
 
@@ -94,9 +102,10 @@ global.FPS.leaveGame = function(player, server) {
     }
 
     const g = global.FPS.game;
-    g.players = g.players.filter(x => x !== ps.uuid);
-    g.teams.red = g.teams.red.filter(x => x !== ps.uuid);
-    g.teams.blue = g.teams.blue.filter(x => x !== ps.uuid);
+    const id = ps.uuid;
+    g.players = g.players.filter(x => String(x) !== id);
+    g.teams.red = g.teams.red.filter(x => String(x) !== id);
+    g.teams.blue = g.teams.blue.filter(x => String(x) !== id);
 
     ps.gameId = null;
     ps.team = null;
@@ -105,13 +114,12 @@ global.FPS.leaveGame = function(player, server) {
     global.FPS.teleportLobby(player, server);
     global.FPS.resetPlayer(player, server);
 
-    player.tell('[FPS] 已离开游戏。');
+    player.tell('§e[FPS] 你已离开比赛。');
 
-    if (g.players.length < global.FPS.CONFIG.minPlayers &&
-        g.state === global.FPS.STATE.COUNTDOWN) {
+    if (g.players.length < global.FPS.CONFIG.minPlayers && g.state === global.FPS.STATE.COUNTDOWN) {
         g.state = global.FPS.STATE.PREPARING;
         g.tick = 0;
         g.countdownAnnounced = -1;
-        global.FPS.msg(server, '人数不足，倒计时取消。');
+        global.FPS.msg(server, '§c玩家退出导致人数不足，倒计时取消。');
     }
 };
