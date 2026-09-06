@@ -7,10 +7,6 @@ global.FPS.onKill = function(attacker, victim, server) {
     const vData = global.FPS.ensurePlayer(victim);
 
     if (aData.gameId !== global.FPS.game.id || vData.gameId !== global.FPS.game.id) return;
-    if (aData.team === vData.team) {
-        attacker.tell('§c[FPS] 警告：请勿攻击队友！');
-        return;
-    }
 
     aData.kills++;
     vData.deaths++;
