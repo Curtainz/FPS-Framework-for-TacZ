@@ -114,6 +114,7 @@ ServerEvents.tick(event => {
             g.tick = 0;
 
             server.runCommandSilent('gamerule doImmediateRespawn true');
+            server.runCommandSilent('gamerule doEntityDrops ' + global.FPS.CONFIG.dropsEnabled);
             console.info('[FPS Start] Countdown done. Teleporting players: ' + JSON.stringify(g.players));
 
             let allOnline = server.getPlayerList().getPlayers();
