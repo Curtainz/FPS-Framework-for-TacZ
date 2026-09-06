@@ -15,10 +15,8 @@ global.FPS.ensurePlayer = function(player) {
             gameId: null,
             team: null,
             alive: true,
-            respawnTimer: 0,
             kills: 0,
             deaths: 0,
-            assists: 0,
             damage: 0,
             loadout: 'assault'
         };
@@ -70,7 +68,6 @@ global.FPS.joinGame = function(player, server) {
     ps.alive = true;
     ps.kills = 0;
     ps.deaths = 0;
-    ps.assists = 0;
     ps.damage = 0;
 
     if (!g.players.includes(ps.uuid)) {
