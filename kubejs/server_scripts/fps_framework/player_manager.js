@@ -81,13 +81,6 @@ global.FPS.joinGame = function(player, server) {
     player.tell('§a[FPS] 成功加入！队伍: ' + ps.team.toUpperCase());
     console.info('[FPS Join] Current players in game: ' + g.players.length + ' / Min needed: ' + global.FPS.CONFIG.minPlayers);
 
-    // 检查是否达到开始倒计时的人数
-    if (g.players.length >= global.FPS.CONFIG.minPlayers && g.state === global.FPS.STATE.PREPARING) {
-        g.state = global.FPS.STATE.COUNTDOWN;
-        g.tick = global.FPS.CONFIG.countdownTicks;
-        g.countdownAnnounced = -1;
-        global.FPS.msg(server, '§a参战人数满足，进入倒计时！');
-    }
 };
 
 global.FPS.leaveGame = function(player, server) {
