@@ -7,11 +7,17 @@ global.FPS.onKill = function(attacker, victim, server) {
     const vData = global.FPS.ensurePlayer(victim);
 
     if (aData.gameId !== global.FPS.game.id || vData.gameId !== global.FPS.game.id) return;
+    if (!aData.team || !vData.team || aData.team === vData.team) {
+        return;
+    }
 
     aData.kills++;
     vData.deaths++;
     vData.alive = false;
 
+    if (typeof global.FPS.game.score[aData.team] !== 'number') {
+        global.FPS.game.score[aData.team] = 0;
+    }
     global.FPS.game.score[aData.team]++;
 
     const aColor = aData.team === 'red' ? '§c' : '§9';
