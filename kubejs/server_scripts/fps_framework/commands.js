@@ -182,7 +182,7 @@ ServerEvents.commandRegistry(event => {
             }
 
             const ps = global.FPS.ensurePlayer(p);
-            msg(ctx, 'K=' + ps.kills + ' D=' + ps.deaths + ' A=' + ps.assists + ' DMG=' + ps.damage);
+            msg(ctx, 'K=' + ps.kills + ' D=' + ps.deaths + ' DMG=' + ps.damage);
             return 1;
         })
     );
@@ -193,7 +193,7 @@ ServerEvents.commandRegistry(event => {
             const p = ctx.source.player;
             if (!p) return 0;
             const ps = global.FPS.ensurePlayer(p);
-            msg(ctx, 'K=' + ps.kills + ' D=' + ps.deaths + ' A=' + ps.assists + ' DMG=' + ps.damage);
+            msg(ctx, 'K=' + ps.kills + ' D=' + ps.deaths + ' DMG=' + ps.damage);
             return 1;
         })
     );
