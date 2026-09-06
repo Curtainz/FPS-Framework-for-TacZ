@@ -29,10 +29,10 @@ global.FPS.getMap = function(id) {
 
 global.FPS.teleportLobby = function(player, server) {
     const p = global.FPS.CONFIG.lobby || { dimension: 'minecraft:overworld', x: 0, y: 80, z: 0 };
-    global.FPS.teleportSafe(player, server, p.dimension, p.x, p.z, 0, 320, -64);
+    global.FPS.teleportSafe(player, server, p.dimension, p.x, p.z, 0, 320, -64, p.y);
 };
 
-global.FPS.teleportSafe = function(player, server, dimension, x, z, yaw, maxY, minY) {
+global.FPS.teleportSafe = function(player, server, dimension, x, z, yaw, maxY, minY, fallbackY) {
     for (let y = maxY; y >= minY; y--) {
         const command =
             'execute in ' + dimension + ' positioned ' + x + ' ' + y + ' ' + z +
@@ -42,6 +42,16 @@ global.FPS.teleportSafe = function(player, server, dimension, x, z, yaw, maxY, m
         if (server.runCommandSilent(command) > 0) {
             console.info('[FPS Debug] Player ' + player.username + ' safely teleported to ' + dimension + ' at Y=' + y + '.');
             return true;
+        }
+    }
+
+    if (fallbackY !== undefined) {
+        try {
+            player.teleportTo(dimension, x, fallbackY, z, yaw, 0);
+            console.warn('[FPS Warning] Safe scan failed; used configured fallback Y=' + fallbackY + ' for ' + player.username + '.');
+            return true;
+        } catch (err) {
+            console.error('[FPS Error] Native fallback teleport failed for ' + player.username + ': ' + err);
         }
     }
 
@@ -56,5 +66,5 @@ global.FPS.teleportSpawn = function(player, team, server) {
     const points = map.spawns[team] || map.spawns.red;
     const p = points[Math.floor(Math.random() * points.length)];
 
-    global.FPS.teleportSafe(player, server, map.dimension, p.x, p.z, p.yaw, 320, -64);
+    global.FPS.teleportSafe(player, server, map.dimension, p.x, p.z, p.yaw, 320, -64, p.y);
 };
