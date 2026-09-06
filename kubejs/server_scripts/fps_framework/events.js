@@ -20,7 +20,7 @@ PlayerEvents.loggedOut(event => {
     delete global.FPS.players[id];
 
     if (global.FPS.game.players.length === 0) {
-        global.FPS.game = null;
+        global.FPS.hardReset(event.server);
     }
 });
 
@@ -62,7 +62,6 @@ PlayerEvents.respawned(event => {
 
     if (ps && ps.gameId === global.FPS.game.id) {
         ps.alive = true;
-        ps.respawnTimer = 0;
 
         event.server.runCommandSilent('gamemode adventure ' + player.username);
         global.FPS.teleportSpawn(player, ps.team, event.server);
@@ -122,7 +121,6 @@ ServerEvents.tick(event => {
                     let ps = global.FPS.players[targetId];
                     if (ps) {
                         ps.alive = true;
-                        ps.respawnTimer = 0;
 
                         server.runCommandSilent('gamemode adventure ' + target.username);
                         global.FPS.teleportSpawn(target, ps.team, server);
@@ -173,7 +171,6 @@ ServerEvents.tick(event => {
     else if (g.state === global.FPS.STATE.RESULT) {
         g.tick++;
         if (g.tick >= 100) {
-            server.runCommandSilent('gamerule doImmediateRespawn false');
             global.FPS.hardReset(server);
         }
     }
