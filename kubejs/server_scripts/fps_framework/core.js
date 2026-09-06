@@ -73,8 +73,41 @@ global.FPS.setDrops = function(server, enabled) {
     server.runCommandSilent('gamerule doEntityDrops ' + enabled);
 };
 
+global.FPS.startRound = function(server) {
+    const currentGame = global.FPS.game;
+    if (!currentGame) return;
+
+    currentGame.state = global.FPS.STATE.PLAYING;
+    currentGame.tick = 0;
+    server.runCommandSilent('gamerule doImmediateRespawn true');
+    server.runCommandSilent('gamerule doEntityDrops ' + global.FPS.CONFIG.dropsEnabled);
+
+    const onlinePlayers = server.getPlayerList().getPlayers();
+    for (let i = 0; i < onlinePlayers.size(); i++) {
+        const player = onlinePlayers.get(i);
+        const id = global.FPS.playerId(player);
+        const playerState = global.FPS.players[id];
+        if (currentGame.players.indexOf(id) === -1 || !playerState || !playerState.team) continue;
+
+        player.runCommandSilent('gamemode adventure');
+        global.FPS.teleportSpawn(player, playerState.team, server);
+        global.FPS.giveLoadout(player, playerState.loadout, server);
+        playerState.alive = true;
+    }
+    global.FPS.msg(server, '§c§l战斗正式开始！');
+};
+
 global.FPS.hardReset = function(server) {
     if (!global.FPS.game) {
+        server.runCommandSilent('execute as @a at @s if dimension fps:test run gamemode adventure @s');
+        server.runCommandSilent('execute as @a at @s if dimension fps:test run clear @s');
+        server.runCommandSilent('execute as @a at @s if dimension fps:test run effect clear @s');
+        server.runCommandSilent('execute as @a at @s if dimension fps:test run execute in minecraft:overworld run tp @s 0 80 0');
+        const onlinePlayers = server.getPlayerList().getPlayers();
+        for (let i = 0; i < onlinePlayers.size(); i++) {
+            onlinePlayers.get(i).setHealth(20);
+            onlinePlayers.get(i).setFoodLevel(20);
+        }
         server.runCommandSilent('gamerule doImmediateRespawn false');
         server.runCommandSilent('gamerule doEntityDrops true');
         global.FPS.msg(server, '没有活动游戏。');
@@ -101,6 +134,11 @@ global.FPS.hardReset = function(server) {
         global.FPS.teleportLobby(player, server);
         global.FPS.resetPlayer(player, server);
     });
+
+    server.runCommandSilent('execute as @a at @s if dimension fps:test run gamemode adventure @s');
+    server.runCommandSilent('execute as @a at @s if dimension fps:test run clear @s');
+    server.runCommandSilent('execute as @a at @s if dimension fps:test run effect clear @s');
+    server.runCommandSilent('execute as @a at @s if dimension fps:test run execute in minecraft:overworld run tp @s 0 80 0');
 
     server.runCommandSilent('gamerule doImmediateRespawn false');
     server.runCommandSilent('gamerule doEntityDrops true');
