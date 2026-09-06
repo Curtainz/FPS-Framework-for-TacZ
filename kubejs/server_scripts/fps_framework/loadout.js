@@ -4,7 +4,7 @@ global.FPS.LOADOUTS = {
     assault: {
         name: '突击手 (AK47)',
         items: [
-            'tacz:modern_kinetic_gun{GunId:"tacz:ak47",HasBulletInBarrel:1b,AmmoCount:30b}',
+            'tacz:modern_kinetic_gun{GunId:"tacz:ak47",HasBulletInBarrel:1b,GunCurrentAmmoCount:30}',
             'tacz:ammo{AmmoId:"tacz:762x39"} 64',
             'tacz:ammo{AmmoId:"tacz:762x39"} 64',
             'minecraft:iron_chestplate',
