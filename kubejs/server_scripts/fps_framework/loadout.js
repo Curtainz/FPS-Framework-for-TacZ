@@ -4,7 +4,7 @@ global.FPS.LOADOUTS = {
     assault: {
         name: '突击手 (AK47)',
         items: [
-            'tacz:modern_kinetic_gun{GunId:"tacz:ak47",HasBulletInBarrel:1b,AmmoCount:30}',
+            'tacz:modern_kinetic_gun{GunId:"tacz:ak47",HasBulletInBarrel:1b,AmmoCount:30b}',
             'tacz:ammo{AmmoId:"tacz:762x39"} 64',
             'tacz:ammo{AmmoId:"tacz:762x39"} 64',
             'minecraft:iron_chestplate',
@@ -35,7 +35,14 @@ global.FPS.giveLoadout = function(player, loadoutId, server) {
 
     // 4. 发装
     config.items.forEach(itemStr => {
-        const cmd = 'give ' + name + ' ' + itemStr;
+        let cmd = 'give ' + name + ' ' + itemStr;
+        if (itemStr.indexOf('minecraft:iron_chestplate') === 0) {
+            cmd = 'item replace entity ' + name + ' armor.chest with ' + itemStr;
+        } else if (itemStr.indexOf('minecraft:iron_leggings') === 0) {
+            cmd = 'item replace entity ' + name + ' armor.legs with ' + itemStr;
+        } else if (itemStr.indexOf('minecraft:iron_boots') === 0) {
+            cmd = 'item replace entity ' + name + ' armor.feet with ' + itemStr;
+        }
         const result = server.runCommandSilent(cmd);
         console.info('[FPS Debug] Give item to ' + name + ': [' + itemStr + '], result: ' + result);
     });
