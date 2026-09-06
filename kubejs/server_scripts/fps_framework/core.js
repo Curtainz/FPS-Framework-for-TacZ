@@ -22,17 +22,18 @@ global.FPS.CONFIG = {
 
 global.FPS.game = null;
 global.FPS.players = {};
+global.FPS.cleanupOnLogin = {};
 
 global.FPS.msg = function(server, text) {
     server.runCommandSilent('tellraw @a ' + JSON.stringify({text: '[FPS] ' + text}));
 };
 
 global.FPS.resetPlayer = function(player, server) {
-    const id = global.FPS.playerId(player);
-    delete global.FPS.players[id];
     player.runCommandSilent('gamemode adventure');
     player.runCommandSilent('clear');
     player.runCommandSilent('effect clear');
+    player.setHealth(20);
+    player.setFoodLevel(20);
 };
 
 global.FPS.createGame = function(server, mode, mapId) {
@@ -73,15 +74,25 @@ global.FPS.hardReset = function(server) {
         return;
     }
 
+    const participantIds = {};
+    global.FPS.game.players.forEach(id => {
+        participantIds[String(id)] = true;
+    });
+
     const onlinePlayers = server.getPlayerList().getPlayers();
+    const playersToReset = [];
     for (let i = 0; i < onlinePlayers.size(); i++) {
         const p = onlinePlayers.get(i);
         const id = global.FPS.playerId(p);
-        if (global.FPS.players[id]) {
-            global.FPS.teleportLobby(p, server);
-            global.FPS.resetPlayer(p, server);
+        if (participantIds[id]) {
+            playersToReset.push(p);
         }
     }
+
+    playersToReset.forEach(player => {
+        global.FPS.teleportLobby(player, server);
+        global.FPS.resetPlayer(player, server);
+    });
 
     server.runCommandSilent('gamerule doImmediateRespawn false');
     global.FPS.game = null;
