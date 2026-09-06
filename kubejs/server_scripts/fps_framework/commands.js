@@ -22,6 +22,7 @@ ServerEvents.commandRegistry(event => {
             msg(ctx, '/fps status');
             msg(ctx, '/fps maps');
             msg(ctx, '/fps start tdm test');
+            msg(ctx, '/fps begin');
             msg(ctx, '/fps join');
             msg(ctx, '/fps leave');
             msg(ctx, '/fps team red|blue');
@@ -114,6 +115,31 @@ ServerEvents.commandRegistry(event => {
         })
     );
 
+    root.then(Commands.literal('begin')
+        .requires(source => source.hasPermission(2))
+        .executes(ctx => {
+            const game = global.FPS.game;
+            if (!game) {
+                msg(ctx, '当前没有活动游戏，请先执行 /fps start tdm test。');
+                return 0;
+            }
+            if (game.state !== global.FPS.STATE.PREPARING) {
+                msg(ctx, '当前游戏不在准备阶段。');
+                return 0;
+            }
+            if (game.players.length < global.FPS.CONFIG.minPlayers) {
+                msg(ctx, '人数不足，至少需要 ' + global.FPS.CONFIG.minPlayers + ' 名玩家。');
+                return 0;
+            }
+
+            game.state = global.FPS.STATE.COUNTDOWN;
+            game.tick = global.FPS.CONFIG.countdownTicks;
+            game.countdownAnnounced = -1;
+            global.FPS.msg(ctx.source.server, '§a管理员已开始比赛倒计时！');
+            return 1;
+        })
+    );
+
     root.then(Commands.literal('leave')
         .executes(ctx => {
             const p = ctx.source.player;
@@ -135,6 +161,9 @@ ServerEvents.commandRegistry(event => {
             }
 
             const ps = global.FPS.ensurePlayer(p);
+            if (ps.gameId !== global.FPS.game.id && global.FPS.game.state === global.FPS.STATE.PREPARING) {
+                global.FPS.joinGame(p, ctx.source.server);
+            }
             if (ps.gameId !== global.FPS.game.id) {
                 msg(ctx, '你尚未加入当前游戏，请先执行 /fps join。');
                 return 0;
@@ -157,6 +186,9 @@ ServerEvents.commandRegistry(event => {
             }
 
             const ps = global.FPS.ensurePlayer(p);
+            if (ps.gameId !== global.FPS.game.id && global.FPS.game.state === global.FPS.STATE.PREPARING) {
+                global.FPS.joinGame(p, ctx.source.server);
+            }
             if (ps.gameId !== global.FPS.game.id) {
                 msg(ctx, '你尚未加入当前游戏，请先执行 /fps join。');
                 return 0;
@@ -181,17 +213,6 @@ ServerEvents.commandRegistry(event => {
                 return 0;
             }
 
-            const ps = global.FPS.ensurePlayer(p);
-            msg(ctx, 'K=' + ps.kills + ' D=' + ps.deaths + ' DMG=' + ps.damage);
-            return 1;
-        })
-    );
-
-    // Alias retained for the originally requested command name.
-    root.then(Commands.literal('statistics')
-        .executes(ctx => {
-            const p = ctx.source.player;
-            if (!p) return 0;
             const ps = global.FPS.ensurePlayer(p);
             msg(ctx, 'K=' + ps.kills + ' D=' + ps.deaths + ' DMG=' + ps.damage);
             return 1;
