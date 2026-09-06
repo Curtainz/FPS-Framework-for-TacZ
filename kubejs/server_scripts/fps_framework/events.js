@@ -1,6 +1,14 @@
 // 玩家登录初始化
 PlayerEvents.loggedIn(event => {
-    global.FPS.ensurePlayer(event.player);
+    const player = event.player;
+    const id = global.FPS.playerId(player);
+    if (!global.FPS.game && global.FPS.cleanupOnLogin[id]) {
+        global.FPS.teleportLobby(player, event.server);
+        global.FPS.resetPlayer(player, event.server);
+        delete global.FPS.cleanupOnLogin[id];
+    }
+
+    global.FPS.ensurePlayer(player);
     event.player.tell('§e[FPS] 系统就绪，输入 /fps help 查看指令。');
 });
 
@@ -12,6 +20,8 @@ PlayerEvents.loggedOut(event => {
     let ps = global.FPS.players[id];
 
     if (!ps || ps.gameId !== global.FPS.game.id) return;
+
+    global.FPS.cleanupOnLogin[id] = true;
 
     global.FPS.game.players = global.FPS.game.players.filter(x => String(x) !== id);
     global.FPS.game.teams.red = global.FPS.game.teams.red.filter(x => String(x) !== id);
@@ -80,12 +90,6 @@ ServerEvents.tick(event => {
     // 1. PREPARING 阶段
     if (g.state === global.FPS.STATE.PREPARING) {
         g.tick++;
-        if (g.players.length >= global.FPS.CONFIG.minPlayers) {
-            g.state = global.FPS.STATE.COUNTDOWN;
-            g.tick = global.FPS.CONFIG.countdownTicks;
-            g.countdownAnnounced = -1;
-            global.FPS.msg(server, '§a人数达标，比赛倒计时开始！');
-        }
     }
 
     // 2. COUNTDOWN 阶段
