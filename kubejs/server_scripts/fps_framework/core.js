@@ -17,6 +17,7 @@ global.FPS.CONFIG = {
     countdownTicks: 100,
     timeLimitTicks: 20 * 60 * 20,
     scoreLimit: 20,
+    dropsEnabled: true,
     lobby: { dimension: 'minecraft:overworld', x: 0, y: 80, z: 0 }
 };
 
@@ -67,9 +68,15 @@ global.FPS.endGame = function(server, winner) {
     global.FPS.msg(server, winner ? '胜利方：' + winner.toUpperCase() : '游戏结束。');
 };
 
+global.FPS.setDrops = function(server, enabled) {
+    global.FPS.CONFIG.dropsEnabled = enabled;
+    server.runCommandSilent('gamerule doEntityDrops ' + enabled);
+};
+
 global.FPS.hardReset = function(server) {
     if (!global.FPS.game) {
         server.runCommandSilent('gamerule doImmediateRespawn false');
+        server.runCommandSilent('gamerule doEntityDrops true');
         global.FPS.msg(server, '没有活动游戏。');
         return;
     }
@@ -90,11 +97,13 @@ global.FPS.hardReset = function(server) {
     }
 
     playersToReset.forEach(player => {
+        player.runCommandSilent('gamemode spectator');
         global.FPS.teleportLobby(player, server);
         global.FPS.resetPlayer(player, server);
     });
 
     server.runCommandSilent('gamerule doImmediateRespawn false');
+    server.runCommandSilent('gamerule doEntityDrops true');
     global.FPS.game = null;
     global.FPS.players = {};
     global.FPS.msg(server, 'Framework 状态已重置。');
