@@ -29,9 +29,24 @@ global.FPS.getMap = function(id) {
 
 global.FPS.teleportLobby = function(player, server) {
     const p = global.FPS.CONFIG.lobby || { dimension: 'minecraft:overworld', x: 0, y: 80, z: 0 };
-    server.runCommandSilent(
-        'execute in ' + p.dimension + ' run tp ' + player.username + ' ' + p.x + ' ' + p.y + ' ' + p.z
-    );
+    global.FPS.teleportSafe(player, server, p.dimension, p.x, p.z, 0, 320, -64);
+};
+
+global.FPS.teleportSafe = function(player, server, dimension, x, z, yaw, maxY, minY) {
+    for (let y = maxY; y >= minY; y--) {
+        const command =
+            'execute in ' + dimension + ' positioned ' + x + ' ' + y + ' ' + z +
+            ' if block ~ ~ ~ minecraft:air if block ~ ~1 ~ minecraft:air' +
+            ' unless block ~ ~-1 ~ minecraft:air run tp ' + player.username +
+            ' ' + x + ' ' + y + ' ' + z + ' ' + yaw + ' 0';
+        if (server.runCommandSilent(command) > 0) {
+            console.info('[FPS Debug] Player ' + player.username + ' safely teleported to ' + dimension + ' at Y=' + y + '.');
+            return true;
+        }
+    }
+
+    console.error('[FPS Error] No safe teleport position found for ' + player.username + ' in ' + dimension + '.');
+    return false;
 };
 
 global.FPS.teleportSpawn = function(player, team, server) {
@@ -41,14 +56,5 @@ global.FPS.teleportSpawn = function(player, team, server) {
     const points = map.spawns[team] || map.spawns.red;
     const p = points[Math.floor(Math.random() * points.length)];
 
-    // 优先通过原生 teleportTo 传维度与坐标，彻底免疫权限拦截
-    try {
-        player.teleportTo(map.dimension, p.x, p.y, p.z, p.yaw, 0);
-        console.info('[FPS Debug] Player ' + player.username + ' teleported to ' + map.dimension + ' via native API.');
-    } catch (err) {
-        console.error('[FPS Error] Native teleport failed, fallback to command: ' + err);
-        server.runCommandSilent(
-            'execute in ' + map.dimension + ' run tp ' + player.username + ' ' + p.x + ' ' + p.y + ' ' + p.z + ' ' + p.yaw + ' 0'
-        );
-    }
+    global.FPS.teleportSafe(player, server, map.dimension, p.x, p.z, p.yaw, 320, -64);
 };
